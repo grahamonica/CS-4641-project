@@ -1,46 +1,53 @@
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import os
+
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 DATA_DIR = "Data"
 PLOTS_DIR = "Plots"
 
-# Step 1: Load raw.csv and create processing.csv with IN column
-raw = pd.read_csv(os.path.join(DATA_DIR, "raw.csv"))
-raw["IN"] = True
-processing = raw.copy()
-processing.to_csv(os.path.join(DATA_DIR, "processing.csv"), index=False)
-
-# Columns to process for outlier removal (using all data each time per step 3)
-outlier_cols = [
-    "est_diameter_min",
-    "est_diameter_max",
-    "relative_velocity",
-    "miss_distance",
-    "absolute_magnitude",
+OUTLIER_COLUMNS = [
+    "estimated_diameter_kilometers_min",
+    "estimated_diameter_kilometers_max",
+    "relative_velocity0",
+    "miss_distance_kilometers0",
+    "absolute_magnitude_h",
 ]
 
-# Steps 2 & 3: For each column, plot histogram and mark outliers
-for col in outlier_cols:
-    values = processing[col]  # Use all rows each time
+PROCESSED_COLUMNS = [
+    "data_arc_in_days",
+    "observations_used",
+    "orbit_uncertainty",
+    "minimum_orbit_intersection",
+    "epoch_osculation",
+    "eccentricity",
+    "perihelion_distance",
+    "perihelion_time",
+    "absolute_magnitude_h",
+    "estimated_diameter_kilometers_min",
+    "estimated_diameter_kilometers_max",
+    "relative_velocity0",
+    "miss_distance_kilometers0",
+    "is_potentially_hazardous_asteroid",
+]
 
-    mean = values.mean()
-    std = values.std()
-    median = values.median()
 
-    lower = mean - 2 * std
-    upper = mean + 2 * std
+def ensure_output_dirs():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    os.makedirs(PLOTS_DIR, exist_ok=True)
 
+
+def save_distribution_plot(values: pd.Series, col: str, lower: float, upper: float, mean: float, median: float):
     bin_width = (values.max() - values.min()) / 500
+    if bin_width == 0:
+        bin_width = 1
     bins = np.arange(values.min(), values.max() + bin_width, bin_width)
 
     fig, ax = plt.subplots(figsize=(12, 5))
+    _, bin_edges, patches = ax.hist(values, bins=bins, color="steelblue", edgecolor="none")
 
-    counts, bin_edges, patches = ax.hist(values, bins=bins, color="steelblue", edgecolor="none")
-
-    # Color outlier bars red
     for patch, left in zip(patches, bin_edges[:-1]):
         if left < lower or left >= upper:
             patch.set_facecolor("salmon")
@@ -57,30 +64,61 @@ for col in outlier_cols:
 
     in_patch = mpatches.Patch(color="steelblue", label="Within 2σ of mean")
     out_patch = mpatches.Patch(color="salmon", label="Outlier (≥2σ from mean)")
-    ax.legend(handles=[in_patch, out_patch,
-                        plt.Line2D([], [], color="green", linestyle="--", label=f"Median: {median:.4f}"),
-                        plt.Line2D([], [], color="orange", linestyle="-", label=f"Mean: {mean:.4f}"),
-                        plt.Line2D([], [], color="red", linestyle=":", label=f"Mean ± 2σ")],
-              loc="upper right")
+    ax.legend(
+        handles=[
+            in_patch,
+            out_patch,
+            plt.Line2D([], [], color="green", linestyle="--", label=f"Median: {median:.4f}"),
+            plt.Line2D([], [], color="orange", linestyle="-", label=f"Mean: {mean:.4f}"),
+            plt.Line2D([], [], color="red", linestyle=":", label="Mean ± 2σ"),
+        ],
+        loc="upper right",
+    )
 
     plt.tight_layout()
     plt.savefig(os.path.join(PLOTS_DIR, f"{col}_distribution.png"), dpi=150)
     plt.close()
 
-    # Mark outlier rows as OUT in processing
-    outlier_mask = (processing[col] < lower) | (processing[col] > upper)
-    processing.loc[outlier_mask, "IN"] = False
 
-    print(f"{col}: mean={mean:.4f}, std={std:.4f}, median={median:.4f}, "
-          f"outliers marked={outlier_mask.sum()}, total OUT so far={(~processing['IN']).sum()}")
+def main():
+    ensure_output_dirs()
 
-# Save updated processing.csv with IN column reflecting all outlier passes
-processing.to_csv(os.path.join(DATA_DIR, "processing.csv"), index=False)
+    raw = pd.read_csv(os.path.join(DATA_DIR, "raw.csv"))
+    raw = raw.drop(columns=["Unnamed: 0"], errors="ignore")
+    raw["IN"] = True
 
-# Step 4: Build processed.csv — drop cols 1,2,7,8 (id, name, orbiting_body, sentry_object)
-# Keep only IN rows, then drop the IN column
-cols_to_drop = ["id", "name", "orbiting_body", "sentry_object", "IN"]
-processed = processing[processing["IN"]].drop(columns=cols_to_drop)
-processed.to_csv(os.path.join(DATA_DIR, "processed.csv"), index=False)
+    # Rows missing required inputs cannot flow into the downstream analysis.
+    missing_required = raw[PROCESSED_COLUMNS].isna().any(axis=1)
+    raw.loc[missing_required, "IN"] = False
+    processing = raw.copy()
 
-print(f"\nDone. processing.csv rows: {len(processing)}, processed.csv rows: {len(processed)}")
+    for col in OUTLIER_COLUMNS:
+        values = processing[col].dropna()
+        mean = values.mean()
+        std = values.std()
+        median = values.median()
+
+        lower = mean - 2 * std
+        upper = mean + 2 * std
+
+        save_distribution_plot(values, col, lower, upper, mean, median)
+
+        outlier_mask = processing[col].notna() & ((processing[col] < lower) | (processing[col] > upper))
+        processing.loc[outlier_mask, "IN"] = False
+
+        print(
+            f"{col}: mean={mean:.4f}, std={std:.4f}, median={median:.4f}, "
+            f"outliers marked={outlier_mask.sum()}, total OUT so far={(~processing['IN']).sum()}"
+        )
+
+    processing.to_csv(os.path.join(DATA_DIR, "processing.csv"), index=False)
+
+    processed = processing.loc[processing["IN"], PROCESSED_COLUMNS].copy()
+    processed.to_csv(os.path.join(DATA_DIR, "processed.csv"), index=False)
+
+    print(f"\nMissing required rows excluded: {missing_required.sum()}")
+    print(f"Done. processing.csv rows: {len(processing)}, processed.csv rows: {len(processed)}")
+
+
+if __name__ == "__main__":
+    main()
