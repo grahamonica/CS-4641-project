@@ -18,7 +18,6 @@ SCATTER_COLUMNS = [
     "observations_used",
     "orbit_uncertainty",
     "minimum_orbit_intersection",
-    "epoch_osculation",
     "eccentricity",
     "perihelion_distance",
     "perihelion_time",
@@ -65,6 +64,7 @@ def build_post_exploratory_data(processed: pd.DataFrame) -> pd.DataFrame:
             "estimated_diameter_kilometers_min",
             "estimated_diameter_kilometers_max",
             "miss_distance_kilometers0",
+            "epoch_osculation",
         ]
     )
     post = post.rename(columns=POST_RENAME_MAP)
