@@ -2,6 +2,7 @@ Contents of the README
 1. How to use
 2. Preprocessing approach
 3. Data exploration
+4. Linear Regression Model for Eccentricity Prediction (linear_regression.py)
 
 
 How to use
@@ -30,4 +31,34 @@ Data exploration
 
 3. Finally, in normalized.csv we normalize the remaining data in post_exploratory_data.csv by column (mean = 0, std = 1; this includes the hazardous column in the file, but unlike the other columns, we do not normalize this one). In std_means.csv, there are the original means and stds for each column of post_exploratory_data.csv (excluding the hazard column), so it can be unnormalized as desired.
 
-4. The three remaining predictive columns are estimated_diameter, relative_velocity, and absolute magnitude. In step 4, we take normalized.csv, and we create 3 plots in our Exploration folder with each of those three predictors plotted against eachother in the plots. In the plots, points that have hazardous result True, are red, and points that have hazardous result False, are blue.
+
+Linear Regression Model to predict Eccentricity (linear_regression.py)
+
+linear_regression.py builds a linear regression model to predict eccentricity values using advanced feature engineering and feature selection techniques. The model predicts continuous orbital eccentricity rather than binary hazard classification.
+
+1. Data Loading: Reads normalized.csv and separates features (X) from the target variable (eccentricity).
+
+2. Train/Test Split: Splits data into 80% training and 20% testing sets.
+
+3. Feature Engineering to capture non-linear relationships:
+   - Log transforms (only applied to strictly positive columns)
+   - Square root (only applied to strictly positive columns)
+   - Polynomial & Interaction Features: Generates polynomial features up to degree 3, creating interaction terms and higher-order relationships between variables.
+
+4. Feature Scaling: Applies StandardScaler to normalize all features to mean=0 and std=1, which is important for Lasso regularization.
+
+5. Lasso Feature Selection: Uses L1 regularization (alpha=0.01) to automatically select the most important features by shrinking weak coefficients to zero. This step reduces overfitting and improves model interpretability.
+
+6. Linear Regression: Trains the final linear regression model on only the selected features from Lasso feature selection.
+
+7. Evaluation: Compares model performance against a baseline (predicting the mean):
+   - Mean Squared Error (MSE)
+   - Mean Absolute Error (MAE)
+   - R² Score
+   - All metrics are reported for both the model and baseline
+
+8. Visualization: Generates a scatter plot comparing actual vs predicted eccentricity values with a perfect prediction line for visual assessment.
+
+Output:
+- Console output showing selected features, their coefficients, and performance metrics
+- Scatter plot saved to Exploration/linear_regression.png
