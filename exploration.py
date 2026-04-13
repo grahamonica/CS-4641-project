@@ -27,6 +27,16 @@ SCATTER_COLUMNS = [
 ]
 
 
+def reorder_for_hazardous_last(corr: pd.DataFrame) -> pd.DataFrame:
+    hazard_candidates = ["hazardous", "is_potentially_hazardous_asteroid"]
+    hazard_col = next((col for col in hazard_candidates if col in corr.columns), None)
+    if hazard_col is None:
+        return corr
+
+    ordered = [col for col in corr.columns if col != hazard_col] + [hazard_col]
+    return corr.loc[ordered, ordered]
+
+
 def ensure_output_dirs():
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(EXPLORATION_DIR, exist_ok=True)
@@ -34,6 +44,7 @@ def ensure_output_dirs():
 
 def save_correlation_matrix(df: pd.DataFrame, filename: str, title: str):
     corr = df.corr(numeric_only=True)
+    corr = reorder_for_hazardous_last(corr)
 
     fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(corr, vmin=-1, vmax=1, cmap="coolwarm")
