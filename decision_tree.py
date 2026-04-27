@@ -6,6 +6,7 @@ from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.tree import DecisionTreeClassifier, plot_tree
 
+print("imported")
 DATA_DIR = "Data"
 EXPLORATION_DIR = "Exploration"
 FEATURES = ["minimum_orbit_intersection", "absolute_magnitude"]
@@ -40,6 +41,25 @@ def select_depth(
     return selected_depth, best_mean_f1, scores
 
 
+def simplify_tree_annotations(annotations):
+    for annotation in annotations:
+        raw_text = annotation.get_text()
+        stripped_text = raw_text.strip()
+
+        if stripped_text in {"True", "False"}:
+            annotation.set_text("")
+            continue
+
+        lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+        if not lines:
+            continue
+
+        if "<=" in lines[0]:
+            annotation.set_text(f"{lines[0]}\ngini = {float(lines[1]):.3f}")
+        else:
+            annotation.set_text(f"gini = {float(lines[0]):.3f}")
+
+
 def main():
     df = pd.read_csv(os.path.join(DATA_DIR, "normalized.csv"))
     df = df.dropna(subset=FEATURES + [TARGET]).copy()
@@ -65,23 +85,35 @@ def main():
     print("Confusion Matrix:")
     print(confusion_matrix(y_test, y_pred))
     print(f"Selected max_depth (from train CV): {selected_depth}")
-    print(f"Selected model depth: {clf.get_depth()}, leaves: {clf.tree_.n_leaves}")
+    # print(f"Selected model depth: {clf.get_depth()}, leaves: {clf.tree_.n_leaves}")
     print(f"Best 5-fold train CV F1: {best_cv_f1:.4f}")
     print(f"Test F1 score (80/20 split): {test_f1:.4f}")
+    print(
+        "Tree PNG only shows split rules and gini. Training counts were removed because "
+        "they do not correspond to the held-out test confusion matrix."
+    )
     print("Depth search (depth, mean_f1, std_f1):")
     for depth, mean_f1, std_f1 in depth_scores:
         print(f"  ({depth}, {mean_f1:.4f}, {std_f1:.4f})")
 
-    fig, ax = plt.subplots(figsize=(20, 10))
-    plot_tree(
+    fig, ax = plt.subplots(figsize=(24, 14), dpi=200)
+    annotations = plot_tree(
         clf,
         feature_names=FEATURES,
-        class_names=["Not Hazardous", "Hazardous"],
         filled=True,
+        label="none",
+        precision=3,
+        rounded=True,
+        fontsize=30,
         ax=ax,
     )
-    plt.tight_layout()
-    plt.savefig(os.path.join(EXPLORATION_DIR, "decision_tree.png"), dpi=150)
+    simplify_tree_annotations(annotations)
+    plt.tight_layout(pad=0.5)
+    plt.savefig(
+        os.path.join(EXPLORATION_DIR, "decision_tree.png"),
+        dpi=200,
+        bbox_inches="tight",
+    )
     plt.close()
 
     print("Decision tree plot saved to Exploration/decision_tree.png")

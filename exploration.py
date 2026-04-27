@@ -26,6 +26,9 @@ SCATTER_COLUMNS = [
     "estimated_diameter",
 ]
 
+SCATTER_SAMPLE_SIZE = 8000
+SCATTER_RANDOM_STATE = 42
+
 
 def reorder_for_hazardous_last(corr: pd.DataFrame) -> pd.DataFrame:
     hazard_candidates = ["hazardous", "is_potentially_hazardous_asteroid"]
@@ -96,7 +99,17 @@ def normalize_post_data(post: pd.DataFrame):
 
 
 def save_scatter_plots(normalized: pd.DataFrame):
-    colors = normalized["hazardous"].map({True: "red", False: "blue"})
+    plot_df = normalized
+    if SCATTER_SAMPLE_SIZE > 0 and len(normalized) > SCATTER_SAMPLE_SIZE:
+        plot_df = normalized.sample(n=SCATTER_SAMPLE_SIZE, random_state=SCATTER_RANDOM_STATE)
+        print(
+            f"Scatter plots using sampled rows: {len(plot_df)} of {len(normalized)} "
+            f"(seed={SCATTER_RANDOM_STATE})"
+        )
+    else:
+        print(f"Scatter plots using all rows: {len(plot_df)}")
+
+    colors = plot_df["hazardous"].map({True: "red", False: "blue"})
     legend_handles = [
         plt.Line2D([], [], marker="o", color="w", markerfacecolor="red", label="Hazardous"),
         plt.Line2D([], [], marker="o", color="w", markerfacecolor="blue", label="Not Hazardous"),
@@ -104,7 +117,7 @@ def save_scatter_plots(normalized: pd.DataFrame):
 
     for x_col, y_col in itertools.combinations(SCATTER_COLUMNS, 2):
         fig, ax = plt.subplots(figsize=(7, 5))
-        ax.scatter(normalized[x_col], normalized[y_col], c=colors, alpha=0.3, s=10)
+        ax.scatter(plot_df[x_col], plot_df[y_col], c=colors, alpha=0.3, s=10)
         ax.set_xlabel(x_col)
         ax.set_ylabel(y_col)
         ax.set_title(f"{x_col} vs {y_col}")
